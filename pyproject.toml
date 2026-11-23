@@ -1,0 +1,40 @@
+[project]
+name = "rag-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Marcel Hodroj", email = "marcel@easy-trademarks.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.163.1",
+    "lancedb>=0.41.0",
+    "langchain>=1.5.0",
+    "langchain-community>=0.4.2",
+    "pillow>=13.0.0",
+    "pymupdf<2.0",
+    "pypdf>=7.1.0",
+    "pytesseract>=0.3.13",
+    "python-multipart>=0.0.33",
+    "sentence-transformers>=6.3.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+rag-api = "rag_api:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

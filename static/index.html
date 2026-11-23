@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal RAG AI</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 800px; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1 { text-align: center; color: #bb86fc; margin-bottom: 30px; }
+        .control-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #a0a0a0; }
+        select, input[type="file"], input[type="text"], input[type="password"] { width: 100%; padding: 10px; background: #2c2c2c; border: 1px solid #444; border-radius: 6px; color: #fff; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #bb86fc; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 16px; }
+        button:hover { background: #9a67ea; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+        #status { margin-top: 15px; text-align: center; font-weight: bold; }
+        .success { color: #03dac6; }
+        .error { color: #cf6679; }
+        .chat-box { margin-top: 30px; border-top: 1px solid #333; padding-top: 20px; }
+        .messages { height: 300px; overflow-y: auto; background: #121212; border: 1px solid #333; border-radius: 6px; padding: 15px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px 15px; border-radius: 8px; max-width: 80%; line-height: 1.4; }
+        .msg.user { background: #3700b3; color: white; align-self: flex-end; }
+        .msg.bot { background: #2c2c2c; color: #e0e0e0; align-self: flex-start; }
+        .input-row { display: flex; gap: 10px; }
+        .input-row input { flex: 1; }
+        .input-row button { width: auto; padding: 10px 20px; }
+        .flex-row { display: flex; gap: 10px; }
+        .flex-row > div { flex: 1; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🧠 Universal RAG AI</h1>
+
+    <div class="control-group">
+        <label>1. Select AI Provider:</label>
+        <select id="providerSelect" onchange="toggleProviderUI()">
+            <option value="local">Local (Ollama)</option>
+            <option value="cloud">Cloud API (OpenAI, DeepSeek, Groq, etc.)</option>
+        </select>
+    </div>
+
+    <div class="control-group" id="localGroup">
+        <label>Local Model:</label>
+        <select id="localModelSelect">
+            <option>Loading models...</option>
+        </select>
+    </div>
+
+    <div id="cloudGroup" style="display: none; background: #252525; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <div class="control-group">
+            <label>API Base URL:</label>
+            <input type="text" id="cloudUrlInput" placeholder="https://api.openai.com/v1/chat/completions">
+        </div>
+        <div class="flex-row">
+            <div class="control-group">
+                <label>Model Name:</label>
+                <input type="text" id="cloudModelInput" placeholder="gpt-4o">
+            </div>
+            <div class="control-group">
+                <label>API Key:</label>
+                <input type="password" id="cloudKeyInput" placeholder="sk-...">
+            </div>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label>2. Upload Document (PDF or Image):</label>
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg">
+    </div>
+    <button id="uploadBtn" onclick="uploadFile()">Upload & Process File</button>
+
+    <div class="control-group" style="margin-top: 20px;">
+        <label>Or Ingest from Instagram URL:</label>
+        <div class="input-row">
+            <input type="text" id="urlInput" placeholder="https://www.instagram.com/p/...">
+            <button onclick="ingestUrl()">Ingest URL</button>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="chat-box">
+        <div class="messages" id="chatMessages"></div>
+        <div class="input-row">
+            <input type="text" id="chatInput" placeholder="Ask a question..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+        <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <button onclick="optimizePrompt()" style="width: auto; padding: 8px 15px; background: #03dac6; color: #000; font-size: 14px;">
+                ✨ Optimize Prompt & Save Tokens
+            </button>
+            <span id="tokenInfo" style="font-size: 12px; color: #a0a0a0;"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.onload = async () => {
+        const select = document.getElementById('localModelSelect');
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
+            select.innerHTML = '';
+            if (data.models && data.models.length > 0) {
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    select.appendChild(option);
+                });
+            } else {
+                select.innerHTML = '<option disabled>No local models found</option>';
+            }
+        } catch (e) {
+            select.innerHTML = '<option disabled>Error connecting to Ollama</option>';
+        }
+    };
+
+    function toggleProviderUI() {
+        const provider = document.getElementById('providerSelect').value;
+        document.getElementById('localGroup').style.display = provider === 'local' ? 'block' : 'none';
+        document.getElementById('cloudGroup').style.display = provider === 'cloud' ? 'block' : 'none';
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        if (!fileInput.files.length) {
+            status.textContent = "Please select a file first.";
+            status.className = "error";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        uploadBtn.disabled = true;
+        status.textContent = "Processing file... (This may take a moment)";
+        status.className = "";
+
+        try {
+            const response = await fetch('/api/rag/upload', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (response.ok) {
+                status.textContent = data.message;
+                status.className = "success";
+            } else {
+                status.textContent = "Error: " + (data.detail || "Upload failed");
+                status.className = "error";
+            }
+        } catch (e) {
+            status.textContent = "Network Error: " + e.message;
+            status.className = "error";
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    }
+
+    async function ingestUrl() {
+        const url = document.getElementById('urlInput').value;
+        const status = document.getElementById('status');
+        if (!url) return;
+
+        status.textContent = "Scraping URL... (This may take a moment)";
+        status.className = "";
+
+        try {
+            const response = await fetch('/api/rag/ingest_url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+            const data = await response.json();
+            status.textContent = data.message;
+            status.className = data.message.includes("Error") ? "error" : "success";
+        } catch (e) {
+            status.textContent = "Network Error: " + e.message;
+            status.className = "error";
+        }
+    }
+
+    async function optimizePrompt() {
+        const input = document.getElementById('chatInput');
+        const question = input.value.trim();
+        const tokenInfo = document.getElementById('tokenInfo');
+        
+        if (!question) return;
+        
+        tokenInfo.textContent = "Optimizing...";
+        
+        try {
+            const response = await fetch('/api/rag/optimize_prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question })
+            });
+            const data = await response.json();
+            
+            input.value = data.optimized_prompt;
+            tokenInfo.innerHTML = `Original: ${data.original_tokens} tokens | Optimized: ${data.optimized_tokens} tokens (Saved ${data.savings_percentage}%)`;
+            
+        } catch (e) {
+            tokenInfo.textContent = "Error optimizing prompt.";
+        }
+    }
+
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') sendMessage();
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const question = input.value.trim();
+        const messages = document.getElementById('chatMessages');
+        if (!question) return;
+
+        messages.innerHTML += `<div class="msg user">${question}</div>`;
+        input.value = '';
+
+        const loadingId = "loading-" + Date.now();
+        messages.innerHTML += `<div class="msg bot" id="${loadingId}">Thinking...</div>`;
+        messages.scrollTop = messages.scrollHeight;
+
+        const provider = document.getElementById('providerSelect').value;
+        let model, apiKey = null, apiUrl = null;
+
+        if (provider === 'local') {
+            model = document.getElementById('localModelSelect').value;
+        } else {
+            model = document.getElementById('cloudModelInput').value;
+            apiKey = document.getElementById('cloudKeyInput').value;
+            apiUrl = document.getElementById('cloudUrlInput').value;
+        }
+
+        try {
+            const response = await fetch('/api/rag/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, model, api_key: apiKey, api_url: apiUrl })
+            });
+            const data = await response.json();
+            document.getElementById(loadingId).remove();
+            messages.innerHTML += `<div class="msg bot">${data.answer || data.detail}</div>`;
+        } catch (e) {
+            document.getElementById(loadingId).remove();
+            messages.innerHTML += `<div class="msg bot error">Failed to connect to API.</div>`;
+        }
+        messages.scrollTop = messages.scrollHeight;
+    }
+</script>
+</body>
+</html>
